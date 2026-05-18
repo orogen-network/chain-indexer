@@ -1,0 +1,45 @@
+# Local Postgres for the LLM Mining chain indexer.
+#
+#   docker compose up -d         # start db
+#   npm run db:migrate           # apply typeorm migrations (stubbed)
+#   npm run processor:start      # run the indexer
+#
+# Volumes are bind-mounted so a `docker compose down` keeps your indexed
+# state. Remove `./data/pg` to start fresh.
+
+version: '3.8'
+
+services:
+    postgres:
+        image: postgres:16-alpine
+        container_name: chain-indexer-pg
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: chain_indexer
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: postgres
+        ports:
+            - '5432:5432'
+        volumes:
+            - ./data/pg:/var/lib/postgresql/data
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -U postgres']
+            interval: 5s
+            timeout: 5s
+            retries: 10
+
+    # GraphQL gateway (optional; pulled in once the indexer ships entities).
+    # graphql:
+    #     image: subsquid/graphql-server:latest
+    #     depends_on:
+    #         postgres:
+    #             condition: service_healthy
+    #     environment:
+    #         DB_NAME: chain_indexer
+    #         DB_USER: postgres
+    #         DB_PASS: postgres
+    #         DB_HOST: postgres
+    #         DB_PORT: 5432
+    #         GQL_PORT: 4350
+    #     ports:
+    #         - '4350:4350'

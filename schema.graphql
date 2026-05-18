@@ -1,0 +1,175 @@
+"""
+LLM Mining Network — chain indexer schema.
+
+Mirrors the on-chain event surface of pallet-suite (model-registry,
+operator-stake, job-market, bme, slashing, pouw-mint, attestation-registry,
+oracle-twap, nonce-vault, treasury-ext) plus standard block/extrinsic/event
+walls. Granularity: per-block.
+
+Generated TypeORM entities live under src/model/ once `sqd codegen` is
+run; we ship hand-written stubs in src/model/index.ts so typecheck passes
+without the codegen step.
+"""
+
+type Block @entity {
+  "block.id = hash"
+  id: ID!
+  height: Int! @index
+  hash: String! @unique
+  parentHash: String!
+  timestamp: DateTime! @index
+  stateRoot: String!
+  extrinsicsRoot: String!
+  validator: String
+  specName: String!
+  specVersion: Int!
+  extrinsics: [Extrinsic!]! @derivedFrom(field: "block")
+  events: [Event!]! @derivedFrom(field: "block")
+}
+
+type Extrinsic @entity {
+  "blockHash-index"
+  id: ID!
+  block: Block!
+  indexInBlock: Int!
+  pallet: String! @index
+  name: String! @index
+  signer: String @index
+  success: Boolean!
+  tip: BigInt
+  fee: BigInt
+  hash: String!
+  args: JSON
+  events: [Event!]! @derivedFrom(field: "extrinsic")
+}
+
+type Event @entity {
+  "blockHash-eventIndex"
+  id: ID!
+  block: Block!
+  extrinsic: Extrinsic
+  indexInBlock: Int!
+  pallet: String! @index
+  name: String! @index
+  args: JSON
+}
+
+# --- pallet-operator-stake ----------------------------------------------------
+
+type Operator @entity {
+  "32-byte hotkey ss58"
+  id: ID!
+  registeredAt: Int! @index
+  stake: BigInt!
+  attestationCid: String
+  lastHeartbeat: Int @index
+  active: Boolean!
+  slashEvents: [SlashEvent!]! @derivedFrom(field: "operator")
+}
+
+# --- pallet-job-market --------------------------------------------------------
+
+enum JobStatus {
+  Pending
+  Assigned
+  Finalized
+  Disputed
+  Slashed
+  Refunded
+}
+
+type Job @entity {
+  "32-byte job id"
+  id: ID!
+  customer: String! @index
+  modelId: String! @index
+  adapterId: String
+  status: JobStatus! @index
+  submittedAt: Int! @index
+  assignedTo: String @index
+  finalizedAt: Int
+  receiptRoot: String
+  costMicroUSD: BigInt
+}
+
+# --- pallet-bme ---------------------------------------------------------------
+
+type BurnEvent @entity {
+  id: ID!
+  block: Block!
+  timestamp: DateTime! @index
+  customer: String! @index
+  jobId: String @index
+  amount: BigInt!
+  twapPriceMicroUSD: BigInt!
+}
+
+type MintEvent @entity {
+  id: ID!
+  block: Block!
+  timestamp: DateTime! @index
+  operator: String! @index
+  jobId: String @index
+  amount: BigInt!
+  epoch: Int! @index
+}
+
+# --- pallet-slashing ----------------------------------------------------------
+
+enum SlashKind {
+  MissedHeartbeat
+  DisputeUpheld
+  AttestationRevoked
+  ReceiptMismatch
+  Other
+}
+
+enum SlashStatus {
+  Open
+  Disputed
+  Confirmed
+  Reversed
+}
+
+type SlashEvent @entity {
+  id: ID!
+  block: Block!
+  operator: Operator!
+  amount: BigInt!
+  kind: SlashKind! @index
+  status: SlashStatus! @index
+  reasonHash: String!
+  openedAt: Int!
+  resolvedAt: Int
+}
+
+type DisputeEvent @entity {
+  id: ID!
+  block: Block!
+  slashEvent: SlashEvent!
+  disputant: String! @index
+  evidenceCid: String!
+  panelDecision: String
+}
+
+# --- pallet-attestation-registry ---------------------------------------------
+
+type AttestationRecord @entity {
+  id: ID!
+  operator: String! @index
+  vendor: String! @index
+  attestationCid: String!
+  measuredAt: Int!
+  revoked: Boolean!
+  revokedAt: Int
+}
+
+# --- pallet-oracle-twap -------------------------------------------------------
+
+type TwapUpdate @entity {
+  id: ID!
+  block: Block!
+  pair: String! @index
+  twapMicroUSD: BigInt!
+  windowSeconds: Int!
+}
