@@ -50,12 +50,19 @@ export const TRACKED_EVENTS: string[] = [
 
 // Build the processor with the configured RPC / archive endpoints and the
 // set of (pallet, event) pairs we care about.
+//
+// `includeAllBlocks()` makes the processor deliver every block in the range
+// to the handler, regardless of whether it matched any event subscription.
+// We need that for the explorer's "recent blocks" view — most blocks on
+// the skeleton forge testnet contain no custom pallet events, but they
+// still need a Block/Extrinsic row written.
 export function buildProcessor(): SubstrateBatchProcessor<typeof FIELDS> {
     const processor = new SubstrateBatchProcessor()
         .setRpcEndpoint({ url: config.rpcEndpoint, rateLimit: 10 })
         .setBlockRange({ from: config.startBlock, to: config.stopBlock })
         .setFields(FIELDS)
-        .addEvent({ name: TRACKED_EVENTS });
+        .addEvent({ name: TRACKED_EVENTS })
+        .includeAllBlocks();
 
     if (config.archiveGateway) {
         processor.setGateway({ url: config.archiveGateway });
