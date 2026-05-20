@@ -17,7 +17,7 @@ import { decodeEvent, generatedEventNames as generatedDecoderEventNames } from '
 import pkg from '../package.json' with { type: 'json' };
 
 const originalOrogenEnv = process.env.OROGEN_ENV;
-const FINAL_PALLET_SUITE_REV = 'ca947b089344226e455dfcaccafedd7f14fe53ce';
+const FINAL_PALLET_SUITE_REV = 'e97050f088df6312f92b5f5f16df35e41a6668c4';
 
 afterEach(() => {
     if (originalOrogenEnv === undefined) {
