@@ -1,0 +1,8 @@
+dist/
+node_modules/
+.vite/
+coverage/
+.env
+.env.*
+!.env.example
+npm-debug.log*

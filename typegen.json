@@ -1,0 +1,7 @@
+{
+  "$schema": "./node_modules/@subsquid/substrate-typegen/lib/config.schema.json",
+  "outDir": "src/types/generated",
+  "specVersions": "metadata/specVersions.json",
+  "events": true,
+  "calls": true
+}

@@ -1,14 +1,14 @@
 """
-LLM Mining Network — chain indexer schema.
+Orogen Network — chain indexer schema.
 
 Mirrors the on-chain event surface of pallet-suite (model-registry,
 operator-stake, job-market, bme, slashing, pouw-mint, attestation-registry,
 oracle-twap, nonce-vault, treasury-ext) plus standard block/extrinsic/event
 walls. Granularity: per-block.
 
-Generated TypeORM entities live under src/model/ once `sqd codegen` is
-run; we ship hand-written stubs in src/model/index.ts so typecheck passes
-without the codegen step.
+Generated TypeORM entities are emitted under src/model/generated/ by
+`npm run codegen:models`. Runtime metadata-backed event/call accessors are
+emitted under src/types/generated/ by `npm run codegen:types`.
 """
 
 type Block @entity {
@@ -82,7 +82,7 @@ type Job @entity {
   "32-byte job id"
   id: ID!
   customer: String! @index
-  modelId: String! @index
+  modelId: String @index
   adapterId: String
   status: JobStatus! @index
   submittedAt: Int! @index
@@ -98,10 +98,10 @@ type BurnEvent @entity {
   id: ID!
   block: Block!
   timestamp: DateTime! @index
-  customer: String! @index
+  customer: String @index
   jobId: String @index
   amount: BigInt!
-  twapPriceMicroUSD: BigInt!
+  twapPriceMicroUSD: BigInt
 }
 
 type MintEvent @entity {
@@ -111,7 +111,7 @@ type MintEvent @entity {
   operator: String! @index
   jobId: String @index
   amount: BigInt!
-  epoch: Int! @index
+  epoch: Int @index
 }
 
 # --- pallet-slashing ----------------------------------------------------------
@@ -135,10 +135,10 @@ type SlashEvent @entity {
   id: ID!
   block: Block!
   operator: Operator!
-  amount: BigInt!
+  amount: BigInt
   kind: SlashKind! @index
   status: SlashStatus! @index
-  reasonHash: String!
+  reasonHash: String
   openedAt: Int!
   resolvedAt: Int
 }
@@ -147,8 +147,8 @@ type DisputeEvent @entity {
   id: ID!
   block: Block!
   slashEvent: SlashEvent!
-  disputant: String! @index
-  evidenceCid: String!
+  disputant: String @index
+  evidenceCid: String
   panelDecision: String
 }
 

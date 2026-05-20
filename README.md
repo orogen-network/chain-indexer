@@ -1,20 +1,25 @@
 # chain-indexer
 
-[Subsquid](https://docs.subsquid.io)-based archival indexer for the LLM
-Mining Network chain. Follows blocks, extrinsics, and events emitted by
+[Subsquid](https://docs.subsquid.io)-based archival indexer for the Orogen
+Network chain. Follows blocks, extrinsics, and events emitted by
 `chain-node` (which wraps `pallet-suite/runtime`) and writes them into
 Postgres-backed entities for downstream consumers (explorer-web,
 status-page, validator-watcher, billing-bridge).
 
 ## Status
 
-**Skeleton, typecheck + lint + unit-test green.**
+**Local build, lint, typecheck, generated migration check, and unit tests are
+green.** The release migration is generated from `schema.graphql`, checked
+against generated TypeORM model metadata in the local gate, then applied
+against Postgres in the `db-migrations` GitHub workflow.
 
 ```bash
 npm install
 npm run typecheck     # tsc --noEmit, green
 npm run lint          # eslint, 0 warnings
-npm test              # vitest, 3/3 pass
+npm test              # vitest
+npm run build         # emits dist/
+npm run db:migration:check
 ```
 
 What is wired:
@@ -23,36 +28,59 @@ What is wired:
   default, with optional `ARCHIVE_GATEWAY`.
 - Field selection covering block timestamp/state-root/extrinsics-root,
   extrinsic fee/tip/success/signature, and event name/args.
-- Event subscriptions for every pallet listed in §Scope.
+- The processor requests all runtime events plus call/extrinsic relations so
+  `Block`/`Extrinsic`/`Event` rows and event ownership links stay complete;
+  `TRACKED_EVENTS` is a tested domain-handler contract for the pallets listed
+  in §Scope.
 - Handler files (`src/handlers/{core,jobs,bme,slashing,operators}.ts`)
-  that consume strongly-typed events and upsert into TypeORM entities.
-- Hand-written entity stubs in `src/model/index.ts` mirroring
-  `schema.graphql` exactly (so `sqd codegen` is a drop-in replacement
-  later).
-- Hand-typed event interfaces in `src/types/events.ts` (replaced by
-  `sqd typegen` output once the chain emits stable metadata).
+  that consume the current runtime event payloads and upsert into TypeORM
+  entities where the event carries enough data for a truthful summary row.
+- Generated TypeORM entities under `src/model/generated/`, emitted from
+  `schema.graphql` by `npm run codegen:models` and used by the processor and
+  database wiring.
+- Handler event interfaces in `src/types/events.ts` plus generated
+  metadata-backed event/call accessors in `src/types/generated/` from
+  `npm run codegen:types`. Handlers call `decodeEvent()`, which uses the
+  generated accessor when runtime metadata is attached and falls back to raw
+  args for local fixtures/current compatibility. Fields not emitted by the
+  current runtime are nullable in the domain summary tables; the raw
+  `Event.args` wall remains the exact source of truth.
 - `docker-compose.yml` for local Postgres.
+- `src/migrations/1716120000000-Init.ts` plus `npm run db:migrate`
+  for release deployments; the development-only schema-sync initializer is
+  still available as `npm run db:init` when explicitly enabled. `npm start`
+  runs migrations and then starts the processor with `OROGEN_ENV=production`.
+  `npm run db:migration:generate` rewrites the initial migration from
+  `schema.graphql`; `npm run db:migration:check` verifies the committed
+  migration still matches that generated output and then checks its tables,
+  columns, types, and required nullability against generated TypeORM metadata.
+  The consolidated local gate runs that check, while
+  `.github/workflows/db-migrations.yml` applies the migration and re-runs it
+  idempotently against Postgres before deployment.
 - `.env.example` documenting every runtime knob.
 
-What is **not** wired (out of skeleton scope):
+What is **not** wired:
 
-- An actual chain to index. Until `chain-node` is bootable (it currently
-  compiles but the service layer is stubbed; see `chain-node/README.md`),
-  `npm run processor:start` will sit retrying RPC against an unreachable
-  endpoint.
-- `sqd typegen` codegen. Pallet event signatures here are hand-coded; they
-  match `pallet-suite`'s declared events but won't auto-track schema drift.
+- A live long-running chain/indexer deployment. `chain-node --dev --tmp` is
+  bootable locally, but this repo does not launch or supervise the node.
+- A live RPC metadata refresh gate. `metadata/specVersions.json` has been
+  regenerated from the finalized local Orogen runtime pin and `decodeEvent()`
+  selects generated decoders by runtime `specVersion`, but CI does not boot a
+  chain-node and re-capture metadata on every run.
 - GraphQL server (the Subsquid `graphql-server` image is commented out in
   `docker-compose.yml`).
-- Migrations. `npm run db:migrate` is a stub `echo`; the real
-  `subsquid-typeorm-migration generate` runs once the entity set is final
-  and we point at a live database.
+- A live database migration-generation job. The committed initial migration is
+  generated deterministically from `schema.graphql` and checked in CI, but CI
+  does not generate a new migration against a live database because this is
+  still the initial release schema.
 
 ## Layout
 
 ```
 chain-indexer/
 ├── package.json              # @subsquid/* + typeorm + pg + dev tooling
+├── typegen.json              # Subsquid runtime metadata typegen config
+├── metadata/specVersions.json # captured from local chain-node RPC
 ├── tsconfig.json             # strict TS, decorators on
 ├── .eslintrc.json
 ├── .env.example
@@ -61,10 +89,12 @@ chain-indexer/
 ├── src/
 │   ├── main.ts               # entry, builds processor + run loop
 │   ├── config.ts             # env → typed config
-│   ├── model/index.ts        # TypeORM entities (hand-written stubs)
+│   ├── model/index.ts        # generated barrel from npm run codegen:models
+│   ├── model/generated/      # generated by npm run codegen:models
 │   ├── types/
 │   │   ├── context.ts        # Ctx/IndexerBlock/IndexerEvent aliases + FIELDS
-│   │   └── events.ts         # hand-typed pallet event shapes
+│   │   ├── events.ts         # hand-typed pallet event shapes
+│   │   └── generated/        # generated by npm run codegen:types
 │   └── handlers/
 │       ├── core.ts           # Block/Extrinsic/Event capture
 │       ├── jobs.ts           # pallet-job-market lifecycle
@@ -79,39 +109,51 @@ chain-indexer/
 | Pallet | Events |
 |---|---|
 | `pallet-job-market` | `JobSubmitted`, `JobAssigned`, `JobFinalized`, `JobDisputed` |
-| `pallet-bme` | `Burned`, `Minted` |
-| `pallet-slashing` | `SlashOpened`, `SlashConfirmed`, `DisputeOpened` |
-| `pallet-operator-stake` | `Registered`, `Heartbeat`, `Slashed` |
+| `pallet-bme` | `BurnSubmitted`, `Minted`, `ElasticitySet` |
+| `pallet-slashing` | `SlashSubmitted`, `SlashDisputed`, `SlashArbitrated`, `SlashRatified`, `SlashFinalized` |
+| `pallet-operator-stake` | `Registered`, `Unregistered`, `Heartbeat`, `Slashed` |
 
-The full block/extrinsic/event wall is always recorded — pallet-specific
-handlers extend rows with domain models.
+The full block/extrinsic/event wall is always recorded. Pallet-specific
+handlers extend those raw rows with domain summary models when the runtime
+event carries enough information for a truthful typed row.
 
 ## Running locally
 
 ```bash
 docker compose up -d                       # postgres
 cp .env.example .env                       # tune to taste
-npm run db:migrate                         # (stubbed) apply schema
-npm run processor:start                    # indexer
+npm run build
+npm start                                  # migrate, then start indexer
 ```
 
-When `chain-node --dev` is bootable (currently stubbed; see
-`chain-node/README.md`), the indexer will follow that RPC by default and
-start populating entities. Until then it'll retry-loop against the
-unreachable endpoint.
+With `chain-node --dev --tmp` running on the default RPC endpoint, the indexer
+will follow that RPC and start populating entities. Without a node it will
+retry-loop against the unreachable endpoint.
+
+`npm start` is the production-shaped path and forces `OROGEN_ENV=production`.
+For local permissive raw-args fallback while iterating against fixtures, use
+`npm run processor:start:dev`.
+
+## Codegen
+
+```bash
+npm run metadata:explore   # requires a running chain-node RPC
+npm run codegen            # models + metadata-backed event/call accessors
+```
+
+`metadata/specVersions.json` was captured from the runnable `chain-node`
+dependency pin. It currently records the new Orogen genesis/runtime line
+(`orogen@6`) at block 0.
 
 ## Roadmap
 
-1. **`sqd codegen`** — replace `src/model/index.ts` with auto-generated
-   entities from `schema.graphql`.
-2. **`sqd typegen`** — replace `src/types/events.ts` with auto-generated
-   versioned event accessors from the chain metadata.
-3. **Migrations** — generate the initial `migrations/0001-Init.ts` and
-   wire `npm run db:migrate` to `npx squid-typeorm-migration apply`.
-4. **GraphQL gateway** — uncomment the `graphql-server` block in
+1. **Follow-up migrations** — after the initial release, add forward-only
+   migrations for schema changes and keep `npm run db:migration:check` in the
+   gate so committed migrations stay generated and model-compatible.
+2. **GraphQL gateway** — uncomment the `graphql-server` block in
    `docker-compose.yml` and wire a CORS-friendly subgraph for the
    `explorer-web` consumer.
-5. **Archive gateway** — point at the Subsquid Network gateway URL when
+3. **Archive gateway** — point at the Subsquid Network gateway URL when
    the chain has a publicly-archived testnet.
 
 ## License

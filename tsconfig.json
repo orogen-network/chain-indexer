@@ -14,7 +14,7 @@
     "resolveJsonModule": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "isolatedModules": true,
+    "isolatedModules": false,
     "declaration": true,
     "outDir": "dist",
     "types": ["node"]

@@ -3,7 +3,7 @@
  * pallet-specific handlers extend these rows with domain models.
  */
 import type { Ctx, IndexerBlock } from '../types/context.js';
-import { Block, Event, Extrinsic } from '../model/index.js';
+import { Block, Event, Extrinsic } from '../model/generated/index.js';
 
 export async function recordBlockAndExtrinsics(ctx: Ctx, block: IndexerBlock): Promise<void> {
     const header = block.header;

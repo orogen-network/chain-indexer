@@ -13,5 +13,5 @@
     "@typescript-eslint/no-explicit-any": "off",
     "@typescript-eslint/no-empty-function": "off"
   },
-  "ignorePatterns": ["dist", "node_modules"]
+  "ignorePatterns": ["dist", "node_modules", "src/model/generated", "src/types/generated"]
 }

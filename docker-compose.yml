@@ -1,8 +1,7 @@
-# Local Postgres for the LLM Mining chain indexer.
+# Local Postgres for the Orogen chain indexer.
 #
 #   docker compose up -d         # start db
-#   npm run db:migrate           # apply typeorm migrations (stubbed)
-#   npm run processor:start      # run the indexer
+#   npm start                    # apply migrations, then run the indexer
 #
 # Volumes are bind-mounted so a `docker compose down` keeps your indexed
 # state. Remove `./data/pg` to start fresh.

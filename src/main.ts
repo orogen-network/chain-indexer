@@ -8,14 +8,13 @@
  * Indexes:
  *   - Block + extrinsic + event for every block.
  *   - `pallet-job-market` job lifecycle.
- *   - `pallet-bme` burn + mint events.
+ *   - `pallet-bme` burn + mint/config events.
  *   - `pallet-slashing` slash + dispute events.
  *   - `pallet-operator-stake` register + heartbeat.
  *
- * Status: skeleton. Event-name strings are placeholders until pallet-suite
- * metadata is published (running `sqd typegen` against the live chain
- * generates the strongly-typed event accessors that replace
- * `src/types/events.ts`).
+ * Status: runtime event names track the current pallet-suite events. Running
+ * `sqd typegen` against stable metadata should replace `src/types/events.ts`
+ * with strongly typed SCALE accessors.
  */
 import { SubstrateBatchProcessor } from '@subsquid/substrate-processor';
 import { TypeormDatabase } from '@subsquid/typeorm-store';
@@ -38,12 +37,16 @@ export const TRACKED_EVENTS: string[] = [
     'JobMarket.JobAssigned',
     'JobMarket.JobFinalized',
     'JobMarket.JobDisputed',
-    'Bme.Burned',
+    'Bme.BurnSubmitted',
     'Bme.Minted',
-    'Slashing.SlashOpened',
-    'Slashing.SlashConfirmed',
-    'Slashing.DisputeOpened',
+    'Bme.ElasticitySet',
+    'Slashing.SlashSubmitted',
+    'Slashing.SlashDisputed',
+    'Slashing.SlashArbitrated',
+    'Slashing.SlashRatified',
+    'Slashing.SlashFinalized',
     'OperatorStake.Registered',
+    'OperatorStake.Unregistered',
     'OperatorStake.Heartbeat',
     'OperatorStake.Slashed',
 ];
@@ -61,7 +64,14 @@ export function buildProcessor(): SubstrateBatchProcessor<typeof FIELDS> {
         .setRpcEndpoint({ url: config.rpcEndpoint, rateLimit: 10 })
         .setBlockRange({ from: config.startBlock, to: config.stopBlock })
         .setFields(FIELDS)
-        .addEvent({ name: TRACKED_EVENTS })
+        // Request all events so the raw block/extrinsic/event wall remains
+        // complete. TRACKED_EVENTS is the domain-handler contract, not a data
+        // availability filter.
+        .addEvent({ extrinsic: true })
+        // Request all calls/extrinsics too. Without this relation request,
+        // Subsquid keeps the events but strips block.extrinsics and event
+        // ownership links before the mapper sees the block.
+        .addCall({ extrinsic: true, events: true })
         .includeAllBlocks();
 
     if (config.archiveGateway) {

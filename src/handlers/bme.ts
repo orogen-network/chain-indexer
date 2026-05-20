@@ -2,8 +2,8 @@
  * pallet-bme event handler. Captures burn + mint events as immutable rows.
  */
 import type { Ctx, IndexerBlock, IndexerEvent } from '../types/context.js';
-import { Block, BurnEvent, MintEvent } from '../model/index.js';
-import { decode, type BurnedEvent, type MintedEvent } from '../types/events.js';
+import { Block, BurnEvent, MintEvent } from '../model/generated/index.js';
+import { decodeEvent, type BurnSubmittedEvent, type MintedEvent } from '../types/events.js';
 
 export async function handleBme(
     ctx: Ctx,
@@ -14,32 +14,32 @@ export async function handleBme(
     const [, name] = event.name.split('.');
 
     switch (name) {
-        case 'Burned': {
-            const p = decode<BurnedEvent>(event.args);
+        case 'BurnSubmitted': {
+            const p = decodeEvent<BurnSubmittedEvent>(event);
             await ctx.store.upsert(
                 new BurnEvent({
                     id: `${block.header.hash}-${event.index}`,
                     block: blockRef,
                     timestamp: new Date(block.header.timestamp ?? 0),
-                    customer: p.customer,
-                    jobId: p.jobId,
+                    customer: null,
+                    jobId: getBatchId(p),
                     amount: p.amount,
-                    twapPriceMicroUSD: p.twapPriceMicroUSD,
+                    twapPriceMicroUSD: null,
                 }),
             );
             return;
         }
         case 'Minted': {
-            const p = decode<MintedEvent>(event.args);
+            const p = decodeEvent<MintedEvent>(event);
             await ctx.store.upsert(
                 new MintEvent({
                     id: `${block.header.hash}-${event.index}`,
                     block: blockRef,
                     timestamp: new Date(block.header.timestamp ?? 0),
                     operator: p.operator,
-                    jobId: p.jobId,
+                    jobId: null,
                     amount: p.amount,
-                    epoch: p.epoch,
+                    epoch: null,
                 }),
             );
             return;
@@ -47,4 +47,8 @@ export async function handleBme(
         default:
             ctx.log.debug({ event: event.name }, 'bme: unhandled');
     }
+}
+
+function getBatchId(event: BurnSubmittedEvent): string | null {
+    return event.batchId ?? event.batch_id ?? null;
 }

@@ -5,9 +5,9 @@
  * Pending → Assigned → Finalized | Disputed.
  */
 import type { Ctx, IndexerBlock, IndexerEvent } from '../types/context.js';
-import { Job, JobStatus } from '../model/index.js';
+import { Job, JobStatus } from '../model/generated/index.js';
 import {
-    decode,
+    decodeEvent,
     type JobAssignedEvent,
     type JobDisputedEvent,
     type JobFinalizedEvent,
@@ -22,14 +22,15 @@ export async function handleJobs(
     const [, name] = event.name.split('.');
     switch (name) {
         case 'JobSubmitted': {
-            const p = decode<JobSubmittedEvent>(event.args);
+            const p = decodeEvent<JobSubmittedEvent>(event);
+            const jobId = getJobId(p);
             const job = new Job({
-                id: p.jobId,
+                id: jobId,
                 customer: p.customer,
-                modelId: p.modelId,
-                adapterId: p.adapterId,
+                modelId: p.modelId ?? p.model_id ?? null,
+                adapterId: p.adapterId ?? p.adapter_id ?? null,
                 status: JobStatus.Pending,
-                submittedAt: p.submittedAt,
+                submittedAt: p.submittedAt ?? p.submitted_at ?? block.header.height,
                 assignedTo: null,
                 finalizedAt: null,
                 receiptRoot: null,
@@ -39,8 +40,8 @@ export async function handleJobs(
             return;
         }
         case 'JobAssigned': {
-            const p = decode<JobAssignedEvent>(event.args);
-            const existing = await ctx.store.get(Job, p.jobId);
+            const p = decodeEvent<JobAssignedEvent>(event);
+            const existing = await ctx.store.get(Job, getJobId(p));
             if (!existing) return;
             existing.status = JobStatus.Assigned;
             existing.assignedTo = p.operator;
@@ -48,19 +49,19 @@ export async function handleJobs(
             return;
         }
         case 'JobFinalized': {
-            const p = decode<JobFinalizedEvent>(event.args);
-            const existing = await ctx.store.get(Job, p.jobId);
+            const p = decodeEvent<JobFinalizedEvent>(event);
+            const existing = await ctx.store.get(Job, getJobId(p));
             if (!existing) return;
             existing.status = JobStatus.Finalized;
-            existing.finalizedAt = p.finalizedAt;
-            existing.receiptRoot = p.receiptRoot;
-            existing.costMicroUSD = p.costMicroUSD;
+            existing.finalizedAt = p.finalizedAt ?? p.finalized_at ?? block.header.height;
+            existing.receiptRoot = p.receiptRoot ?? p.receipt_root ?? null;
+            existing.costMicroUSD = p.costMicroUSD ?? p.cost_micro_usd ?? null;
             await ctx.store.upsert(existing);
             return;
         }
         case 'JobDisputed': {
-            const p = decode<JobDisputedEvent>(event.args);
-            const existing = await ctx.store.get(Job, p.jobId);
+            const p = decodeEvent<JobDisputedEvent>(event);
+            const existing = await ctx.store.get(Job, getJobId(p));
             if (!existing) return;
             existing.status = JobStatus.Disputed;
             await ctx.store.upsert(existing);
@@ -69,4 +70,8 @@ export async function handleJobs(
         default:
             ctx.log.debug({ event: event.name, height: block.header.height }, 'jobs: unhandled');
     }
+}
+
+function getJobId(event: { jobId?: string; job_id?: string }): string {
+    return event.jobId ?? event.job_id ?? '';
 }

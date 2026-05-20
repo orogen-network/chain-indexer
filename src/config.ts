@@ -8,6 +8,8 @@ export interface IndexerConfig {
     startBlock: number;
     stopBlock: number | undefined;
     graphqlPort: number;
+    allowSchemaSync: boolean;
+    orogenEnv: string;
     db: {
         host: string;
         port: number;
@@ -37,12 +39,20 @@ function strOptional(name: string): string | undefined {
     return v === undefined || v === '' ? undefined : v;
 }
 
+function bool(name: string, defaultValue = false): boolean {
+    const v = process.env[name];
+    if (v === undefined || v === '') return defaultValue;
+    return ['1', 'true', 'yes'].includes(v.toLowerCase());
+}
+
 export const config: IndexerConfig = {
     rpcEndpoint: str('RPC_ENDPOINT', 'ws://127.0.0.1:9944'),
     archiveGateway: strOptional('ARCHIVE_GATEWAY'),
     startBlock: num('START_BLOCK', 0) ?? 0,
     stopBlock: num('STOP_BLOCK', undefined),
     graphqlPort: num('GRAPHQL_PORT', 4350) ?? 4350,
+    allowSchemaSync: bool('CHAIN_INDEXER_ALLOW_SCHEMA_SYNC', false),
+    orogenEnv: str('OROGEN_ENV', 'development'),
     db: {
         host: str('DB_HOST', '127.0.0.1'),
         port: num('DB_PORT', 5432) ?? 5432,
