@@ -42,6 +42,8 @@ jobs:
           if [ "${GITHUB_REPOSITORY##*/}" = "docs-site" ]; then
             git clone --depth 1 https://github.com/orogen-network/landing-site ../landing-site
           fi
+      - name: Restore pallet-suite sibling (event-enum drift tests)
+        run: git clone --depth 1 https://github.com/orogen-network/pallet-suite ../pallet-suite
       - uses: actions/cache@v4
         if: ${{ hashFiles('Cargo.toml') != '' }}
         with:
