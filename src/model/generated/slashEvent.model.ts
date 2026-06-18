@@ -29,6 +29,10 @@ export class SlashEvent {
     kind!: SlashKind
 
     @Index_()
+    @StringColumn_({nullable: true})
+    faultCode!: string | undefined | null
+
+    @Index_()
     @Column_("varchar", {length: 9, nullable: false})
     status!: SlashStatus
 

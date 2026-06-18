@@ -94,6 +94,41 @@ describe('runtime-shaped handler payloads', () => {
         expect(slash.status).toBe(SlashStatus.Confirmed);
         expect(slash.resolvedAt).toBe(25);
     });
+
+    it('maps every FaultCode variant to the right SlashKind and preserves faultCode', async () => {
+        // Regression guard for the lossy SlashKind mapping: the old dead
+        // `code in SlashKind` branch + substring heuristics bucketed 10 of 13
+        // variants to Other and misclassified ValidatorCollusion as
+        // DisputeUpheld. Exhaustive coverage of all 13 runtime FaultCode
+        // variants + the faultCode-preservation field.
+        const cases: Array<[string, string]> = [
+            ['WrongResponse', 'ReceiptMismatch'],
+            ['LogProbDrift', 'ReceiptMismatch'],
+            ['CacheReplay', 'ReceiptMismatch'],
+            ['HeartbeatMiss', 'MissedHeartbeat'],
+            ['AttestationStale', 'AttestationRevoked'],
+            ['DeviceCertCollision', 'AttestationRevoked'],
+            ['WrongModel', 'Other'],
+            ['QuantizationSwap', 'Other'],
+            ['KernelPackMismatch', 'Other'],
+            ['SanctionsHit', 'Other'],
+            ['ValidatorCollusion', 'Other'],
+            ['FakeBurn', 'Other'],
+            ['BatchOvercommit', 'Other'],
+        ];
+        for (let i = 0; i < cases.length; i++) {
+            const [code, expectedKind] = cases[i];
+            const { ctx, store } = testCtx();
+            await handleSlashing(ctx, block(40), event('Slashing.SlashSubmitted', {
+                slash_id: 100 + i,
+                operator: 'op1',
+                fault_code: { __kind: code },
+            }));
+            const slash = store.mustGet(SlashEvent, `slash-${100 + i}`);
+            expect(slash.kind).toBe(expectedKind);
+            expect(slash.faultCode).toBe(code);
+        }
+    });
 });
 
 class TestStore {

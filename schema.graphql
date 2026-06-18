@@ -137,6 +137,11 @@ type SlashEvent @entity {
   operator: Operator!
   amount: BigInt
   kind: SlashKind! @index
+  # Exact runtime FaultCode variant (e.g. "WrongModel", "CacheReplay") as
+  # emitted by pallet-slashing. SlashKind is a coarse category; faultCode
+  # preserves the precise reason for audit fidelity and so lossy substring
+  # heuristics can never drop a fault into "Other".
+  faultCode: String @index
   status: SlashStatus! @index
   reasonHash: String
   openedAt: Int!

@@ -99,6 +99,7 @@ export class Init1716120000000 implements MigrationInterface {
                 operator_id text NOT NULL REFERENCES operator(id),
                 amount numeric,
                 kind varchar(18) NOT NULL CHECK (kind IN ('MissedHeartbeat', 'DisputeUpheld', 'AttestationRevoked', 'ReceiptMismatch', 'Other')),
+                fault_code text,
                 status varchar(9) NOT NULL CHECK (status IN ('Open', 'Disputed', 'Confirmed', 'Reversed')),
                 reason_hash text,
                 opened_at integer NOT NULL,
@@ -165,6 +166,7 @@ export class Init1716120000000 implements MigrationInterface {
         await queryRunner.query('CREATE INDEX idx_slash_event_block_id ON slash_event(block_id)');
         await queryRunner.query('CREATE INDEX idx_slash_event_operator_id ON slash_event(operator_id)');
         await queryRunner.query('CREATE INDEX idx_slash_event_kind ON slash_event(kind)');
+        await queryRunner.query('CREATE INDEX idx_slash_event_fault_code ON slash_event(fault_code)');
         await queryRunner.query('CREATE INDEX idx_slash_event_status ON slash_event(status)');
         await queryRunner.query('CREATE INDEX idx_dispute_event_block_id ON dispute_event(block_id)');
         await queryRunner.query('CREATE INDEX idx_dispute_event_slash_event_id ON dispute_event(slash_event_id)');

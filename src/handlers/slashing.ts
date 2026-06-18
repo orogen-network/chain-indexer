@@ -34,13 +34,15 @@ export async function handleSlashing(
             const p = decodeEvent<SlashSubmittedEvent>(event);
             const slashId = slashEventId(p);
             const operator = await ensureOperator(ctx, p.operator, block.header.height);
+            const faultCode = variantName(p.faultCode ?? p.fault_code);
             await ctx.store.upsert(
                 new SlashEvent({
                     id: slashId,
                     block: blockRef,
                     operator,
                     amount: null,
-                    kind: slashKind(p.faultCode ?? p.fault_code),
+                    kind: slashKind(ctx, faultCode),
+                    faultCode: faultCode || null,
                     status: SlashStatus.Open,
                     reasonHash: null,
                     openedAt: block.header.height,
@@ -137,16 +139,44 @@ function getSlashId(event: { slashId?: number | bigint; slash_id?: number | bigi
     return event.slashId ?? event.slash_id ?? 0;
 }
 
-function slashKind(faultCode: unknown): SlashKind {
-    const code = variantName(faultCode);
-    if (code in SlashKind) {
-        return SlashKind[code as keyof typeof SlashKind];
+/**
+ * Map a pallet-slashing `FaultCode` variant to the coarse `SlashKind` category.
+ *
+ * This is an EXHAUSTIVE switch over all 13 runtime FaultCode variants
+ * (pallet-suite/pallets/slashing). The previous implementation used a dead
+ * `code in SlashKind` branch (the variant names never match SlashKind keys)
+ * plus fragile substring heuristics, which silently bucketed 10 of 13 variants
+ * to `Other` and misclassified `ValidatorCollusion` as `DisputeUpheld`. The
+ * exact variant is preserved on `SlashEvent.faultCode` so the precise reason
+ * is never lost to the coarse enum. Unknown variants fall through to `Other`
+ * with a warning so a new runtime FaultCode is not silently mis-bucketed.
+ */
+function slashKind(ctx: Ctx, faultCode: string): SlashKind {
+    switch (faultCode) {
+        case 'WrongResponse':
+        case 'LogProbDrift':
+        case 'CacheReplay':
+            return SlashKind.ReceiptMismatch;
+        case 'HeartbeatMiss':
+            return SlashKind.MissedHeartbeat;
+        case 'AttestationStale':
+        case 'DeviceCertCollision':
+            return SlashKind.AttestationRevoked;
+        // WrongModel, QuantizationSwap, KernelPackMismatch, SanctionsHit,
+        // ValidatorCollusion, FakeBurn, BatchOvercommit — no dedicated coarse
+        // category. The precise variant is on SlashEvent.faultCode.
+        case 'WrongModel':
+        case 'QuantizationSwap':
+        case 'KernelPackMismatch':
+        case 'SanctionsHit':
+        case 'ValidatorCollusion':
+        case 'FakeBurn':
+        case 'BatchOvercommit':
+            return SlashKind.Other;
+        default:
+            ctx.log.warn({ faultCode }, 'slashing: unknown FaultCode variant; bucketing to Other');
+            return SlashKind.Other;
     }
-    if (code.includes('Heartbeat')) return SlashKind.MissedHeartbeat;
-    if (code.includes('Receipt') || code.includes('Response')) return SlashKind.ReceiptMismatch;
-    if (code.includes('Attestation')) return SlashKind.AttestationRevoked;
-    if (code.includes('Dispute')) return SlashKind.DisputeUpheld;
-    return SlashKind.Other;
 }
 
 function isRatified(decision: unknown): boolean {
