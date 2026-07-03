@@ -17,7 +17,7 @@ import { decodeEvent, generatedEventNames as generatedDecoderEventNames } from '
 import pkg from '../package.json' with { type: 'json' };
 
 const originalOrogenEnv = process.env.OROGEN_ENV;
-const FINAL_PALLET_SUITE_REV = 'e97050f088df6312f92b5f5f16df35e41a6668c4';
+const FINAL_PALLET_SUITE_REV = '31522afacc0854a3519d7f000c112f42210fb5e9';
 
 afterEach(() => {
     if (originalOrogenEnv === undefined) {
@@ -127,7 +127,7 @@ describe('chain-indexer wiring', () => {
             expect.arrayContaining([
                 expect.objectContaining({
                     specName: 'orogen',
-                    specVersion: 6,
+                    specVersion: 7,
                     blockNumber: 0,
                 }),
             ]),
@@ -136,7 +136,7 @@ describe('chain-indexer wiring', () => {
         const runtime = readFileSync(resolve(repoRoot(), 'pallet-suite/runtime/src/lib.rs'), 'utf8');
         expect(runtime).toContain('spec_name: alloc::borrow::Cow::Borrowed("orogen")');
         expect(runtime).toContain('impl_name: alloc::borrow::Cow::Borrowed("orogen")');
-        expect(runtime).toContain('spec_version: 6');
+        expect(runtime).toContain('spec_version: 7');
         expect(runtime).toContain('transaction_version: 6');
 
         const chainNodeManifest = readFileSync(resolve(repoRoot(), 'chain-node/Cargo.toml'), 'utf8');
